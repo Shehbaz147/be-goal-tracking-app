@@ -38,86 +38,103 @@ class Goal extends Model
         return ($this->current_progress / $this->target_value) * 100;
     }
 
-
-    public function calculateGoalProgress($date = null): mixed
+    public function calculateProgressUnit(): float|int
     {
-        if(!$date){
-            $baseLineDate = Carbon::parse($this->baseline_date);
-            $deadLineDate = Carbon::parse($this->deadline_date);
+        if($this->target_value === 0){
+            return 0;
+        }
 
-            $totalYears = $deadLineDate->endOfDay()->diffInYears($baseLineDate);
+        return $this->current_progress;
+    }
 
-            if($totalYears < 1){
 
-                $totalDays = $deadLineDate->endOfDay()->diffInDays($baseLineDate->startOfDay());
+    public function calculateGoalProgress(): array
+    {
+        $baseLineDate = Carbon::parse($this->baseline_date);
+        $deadLineDate = Carbon::parse($this->deadline_date);
 
-                // Check if baseline and deadline are the same dates
-                if ($totalDays <= 1) {
-                    // Calculate progress for the case where baseline and deadline are the same
-                    $currentProgress = $this->calculateProgressPercentage();
-                    $targetPerDay = $this->target_value;
+        $totalYears = $deadLineDate->endOfDay()->diffInYears($baseLineDate);
 
-                    $currentDay = Carbon::now()->endOfDay();
-                    $expectedProgress = $currentProgress < 100 ? 100 : 0; // Adjust as needed
-                    $expectedProgressUnit = $this->target_value;
-                    $remainingProgress = ($expectedProgress - $currentProgress);
+        if($totalYears < 1){
 
-                    return [
-                        'totalDays' => 0,
-                        'diff' => 0,
-                        'totalYears' => $totalYears,
-                        'targetPerYear' => $targetPerDay,
-                        'currentProgress' => $currentProgress,
-                        'expectedProgress' => $expectedProgress,
-                        'expectedProgressUnit' => $expectedProgressUnit,
-                        'remainingProgress' => $remainingProgress,
-                    ];
-                }
-                else{
-                    $targetPerDays = $this->target_value / $totalDays;
-                    $currentProgress = $this->calculateProgressPercentage();
+            $totalDays = $deadLineDate->endOfDay()->diffInDays($baseLineDate->startOfDay());
 
-                    $currentDay = Carbon::now()->endOfDay();
-                    $diff = $currentDay->diffInDays($baseLineDate->startOfDay());
-                    $expectedProgress = ($diff / $totalDays) * 100;
-                    $expectedProgressUnit = $this->target_value * ($diff / $totalDays);
-                    $remainingProgress = 100 - ($expectedProgress + $currentProgress);
-
-                    return [
-                        'totalDays' => $totalDays,
-                        'diff' => $diff,
-                        'totalYears' => $totalYears,
-                        'targetPerYear' => $targetPerDays,
-                        'currentProgress' => $currentProgress,
-                        'expectedProgress' => $expectedProgress,
-                        'expectedProgressUnit' => $expectedProgressUnit,
-                        'remainingProgress' => $remainingProgress,
-                    ];
-                }
-            }
-            else{
-                $totalDays = $deadLineDate->diffInDays($baseLineDate);
-                $targetPerYear = $this->target_value / $totalYears;
+            // Check if baseline and deadline are the same dates
+            if ($totalDays <= 1) {
+                // Calculate progress for the case where baseline and deadline are the same
                 $currentProgress = $this->calculateProgressPercentage();
+                $currentProgressUnit = $this->calculateProgressUnit();
+                $targetPerDay = $this->target_value;
 
                 $currentDay = Carbon::now()->endOfDay();
-                $progressWithRespectToDay = $currentDay->diffInDays($baseLineDate->startOfDay());
-                $expectedProgress = ($progressWithRespectToDay / $totalDays) * 100;
-                $expectedProgressUnit = $this->target_value * ($progressWithRespectToDay / $totalDays);
-                $remainingProgress = 100 - ($expectedProgress + $currentProgress);
+                $expectedProgress = $currentProgress < 100 ? 100 : 0; // Adjust as needed
+                $expectedProgressUnit = $this->target_value;
+                $remainingProgress = ($expectedProgress - $currentProgress);
+                $remainingProgressUnit = $expectedProgressUnit - $currentProgressUnit;
 
                 return [
-                    'totalDays' => $totalDays,
+                    'totalDays' => 0,
+                    'diff' => 0,
                     'totalYears' => $totalYears,
-                    'targetPerYear' => $targetPerYear,
+                    'targetPerYear' => $targetPerDay,
                     'currentProgress' => $currentProgress,
+                    'currentProgressUnit' => $currentProgressUnit,
                     'expectedProgress' => $expectedProgress,
                     'expectedProgressUnit' => $expectedProgressUnit,
                     'remainingProgress' => $remainingProgress,
+                    'remainingProgressUnit' => $remainingProgressUnit,
                 ];
             }
-        }else{
-            return [];
+            else{
+                $targetPerDays = $this->target_value / $totalDays;
+                $currentProgress = $this->calculateProgressPercentage();
+
+                $currentDay = Carbon::now()->endOfDay();
+                $currentProgressUnit = $this->calculateProgressUnit();
+                $diff = $currentDay->diffInDays($baseLineDate->startOfDay());
+                $expectedProgress = ($diff / $totalDays) * 100;
+                $expectedProgressUnit = $this->target_value * ($diff / $totalDays);
+                $remainingProgress = $currentProgress > 0 ? 100 - ($expectedProgress + $currentProgress) : 100 - $currentProgress;
+                $remainingProgressUnit = $currentProgressUnit > 0 ? $this->target_value - ($expectedProgressUnit + $currentProgressUnit) : $this->target_value - $currentProgressUnit;
+
+                return [
+                    'totalDays' => $totalDays,
+                    'diff' => $diff,
+                    'totalYears' => $totalYears,
+                    'targetPerYear' => $targetPerDays,
+                    'currentProgress' => $currentProgress,
+                    'currentProgressUnit' => $currentProgressUnit,
+                    'expectedProgress' => $expectedProgress,
+                    'expectedProgressUnit' => $expectedProgressUnit,
+                    'remainingProgress' => $remainingProgress,
+                    'remainingProgressUnit' => $remainingProgressUnit,
+                ];
+            }
+        }
+        else{
+            $totalDays = $deadLineDate->diffInDays($baseLineDate);
+            $targetPerYear = $this->target_value / $totalYears;
+            $currentProgress = $this->calculateProgressPercentage();
+            $currentProgressUnit = $this->calculateProgressUnit();
+
+            $currentDay = Carbon::now()->endOfDay();
+            $progressWithRespectToDay = $currentDay->diffInDays($baseLineDate->startOfDay());
+            $expectedProgress = ($progressWithRespectToDay / $totalDays) * 100;
+            $expectedProgressUnit = $this->target_value * ($progressWithRespectToDay / $totalDays);
+            $remainingProgress = $currentProgress > 0 ? 100 - ($expectedProgress + $currentProgress) : 100 - $currentProgress;
+            $remainingProgressUnit = $currentProgressUnit > 0 ? $this->target_value - ($expectedProgressUnit + $currentProgressUnit) : $this->target_value - $currentProgressUnit;
+
+            return [
+                'totalDays' => $totalDays,
+                'totalYears' => $totalYears,
+                'targetPerYear' => $targetPerYear,
+                'currentProgress' => $currentProgress,
+                'currentProgressUnit' => $currentProgressUnit,
+                'expectedProgress' => $expectedProgress,
+                'expectedProgressUnit' => $expectedProgressUnit,
+                'remainingProgress' => $remainingProgress,
+                'remainingProgressUnit' => $remainingProgressUnit,
+            ];
         }
     }
 

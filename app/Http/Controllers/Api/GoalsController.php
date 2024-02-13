@@ -6,6 +6,9 @@ use App\Events\GoalCreated;
 use App\Events\GoalDeleted;
 use App\Events\GoalUpdated;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\DeleteGoalRequest;
+use App\Http\Requests\StoreGoalRequest;
+use App\Http\Requests\UpdateGoalRequest;
 use App\Models\Goal;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -15,29 +18,9 @@ use Symfony\Component\Routing\Exception\ResourceNotFoundException;
 
 class GoalsController extends Controller
 {
-    public function list(Request $request)
+
+    protected function validateBaselineAndDeadline($request)
     {
-
-        //get all goals for the user using pagination perPage 12
-        $goals = $request->user()->goals()->orderBy('id', 'desc')->get();
-
-        return response()->json([
-            'goals' => [
-                'data' => $goals
-            ]
-        ], Response::HTTP_OK);
-    }
-
-    public function store(Request $request)
-    {
-        $request->validate([
-            'name' => 'required|max:50',
-            'baseline' => 'required|date',
-            'deadline' => 'required|date',
-            'target' => 'required|int',
-            'unit' => 'required|string'
-        ]);
-
         if (Carbon::parse($request->deadline) < Carbon::parse($request->baseline)) {
             return \response()->json([
                 'message' => 'Deadline date should be greater than the baseline date'
@@ -53,6 +36,36 @@ class GoalsController extends Controller
                 ]
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
+
+    }
+
+    protected function validateTargetValue($request, $goal)
+    {
+        if ($request->progress > $goal->target_value) {
+            return \response()->json([
+                'message' => 'Progress should not exceed the target value',
+                'errors' => [
+                    'progress' => 'Progress should not exceed the target value',
+                ],
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    public function list(Request $request)
+    {
+        $data = $request->user()->goals()->orderBy('id', 'desc')->get();
+
+        return response()->json([
+            'goals' => [
+                'data' => $data
+            ]
+        ], Response::HTTP_OK);
+    }
+
+    public function store(StoreGoalRequest $request)
+    {
+
+        $this->validateBaselineAndDeadline($request);
 
         $goal = Goal::create([
             'user_id' => $request->user()->id,
@@ -71,19 +84,9 @@ class GoalsController extends Controller
 
     }
 
-    public function update(Request $request)
+    public function update(UpdateGoalRequest $request)
     {
         try {
-            $request->validate([
-                'id' => 'required',
-                'name' => 'required|max:50',
-                'baseline' => 'required|date',
-                'deadline' => 'required|date',
-                'target' => 'required|int',
-                'unit' => 'required|string',
-                'progress' => 'required',
-                'status' => 'required'
-            ]);
 
             $goal = Goal::find($request->id);
             if (!$goal) {
@@ -92,30 +95,9 @@ class GoalsController extends Controller
                 ], Response::HTTP_NOT_FOUND);
             }
 
-            if (Carbon::parse($request->deadline) < Carbon::parse($request->baseline)) {
-                return \response()->json([
-                    'message' => 'Deadline date should be greater than the baseline date'
-                ], Response::HTTP_INTERNAL_SERVER_ERROR);
-            }
+            $this->validateBaselineAndDeadline($request);
 
-            if (Carbon::parse($request->deadline)->endOfDay()->diffInDays(Carbon::parse($request->baseline)->startOfDay()) < 7) {
-                return \response()->json([
-                    'message' => 'There should be a minimum of 1 week gap between the baseline and deadline',
-                    'errors' => [
-                        'baseline' => 'There should be a minimum of 1 week gap between the baseline and deadline',
-                        'deadline' => 'There should be a minimum of 1 week gap between the baseline and deadline',
-                    ]
-                ], Response::HTTP_INTERNAL_SERVER_ERROR);
-            }
-
-            if ($request->progress > $goal->target_value) {
-                return \response()->json([
-                    'message' => 'Progress should not exceed the target value',
-                    'errors' => [
-                        'progress' => 'Progress should not exceed the target value',
-                    ],
-                ], Response::HTTP_INTERNAL_SERVER_ERROR);
-            }
+            $this->validateTargetValue($request, $goal);
 
             $goal->update([
                 'name' => $request->name,
@@ -163,12 +145,8 @@ class GoalsController extends Controller
         }
     }
 
-
-    public function delete(Request $request)
+    public function delete(DeleteGoalRequest $request)
     {
-        $request->validate([
-            'goal' => 'required'
-        ]);
 
         $goal = Goal::find($request->goal);
 
@@ -184,21 +162,5 @@ class GoalsController extends Controller
         return \response()->json([
             'message' => 'Goal deleted successfully'
         ], Response::HTTP_OK);
-    }
-
-    public function updateDailyProgress(Request $request)
-    {
-        $request->validate([
-            'daily_progress' => 'required|integer',
-        ]);
-
-        $goal = Goal::find($request->goal_id);
-
-        $goal->update([
-            'daily_progress' => $request->input('daily_progress'),
-            'progress_date' => Carbon::now()->format('Y-m-d h:i')
-        ]);
-
-        return redirect()->route('goals.index')->with('success', 'Daily progress updated successfully.');
     }
 }
